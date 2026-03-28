@@ -1,0 +1,119 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: userId
+    // Fields:
+    //   - uid: string (required)
+    //   - displayName: string (required)
+    //   - email: string (required)
+    //   - photoURL: string (optional)
+    //   - xp: number (required)
+    //   - badges: list (required)
+    //   - bio: string (optional)
+    //   - createdAt: string (required)
+    //
+    // Collection: notes
+    // Document ID: noteId
+    // Fields:
+    //   - userId: string (required)
+    //   - content: string (required)
+    //   - summary: string (required)
+    //   - flashcards: list (required)
+    //   - quiz: list (required)
+    //   - createdAt: string (required)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+    
+    function uidUnchanged() {
+      return !('uid' in request.resource.data) || request.resource.data.uid == request.auth.uid;
+    }
+    
+    function uidNotModified() {
+      return !('uid' in request.resource.data) || request.resource.data.uid == resource.data.uid;
+    }
+    
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+    
+    function isValidDateString(dateStr) {
+      return dateStr is string && dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
+    }
+
+    function isValidUser(data) {
+      return hasRequiredFields(['uid', 'displayName', 'email', 'xp', 'badges', 'createdAt']) &&
+             data.uid is string && data.uid.size() > 0 && data.uid.size() < 100 &&
+             data.displayName is string && data.displayName.size() > 0 && data.displayName.size() < 100 &&
+             data.email is string && data.email.size() > 0 && data.email.size() < 200 &&
+             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() < 1000)) &&
+             data.xp is number && data.xp >= 0 &&
+             data.badges is list && data.badges.size() <= 100 &&
+             (!('bio' in data) || (data.bio is string && data.bio.size() < 1000)) &&
+             isValidDateString(data.createdAt);
+    }
+
+    function isValidNote(data) {
+      return hasRequiredFields(['userId', 'content', 'summary', 'flashcards', 'quiz', 'createdAt']) &&
+             data.userId is string && data.userId == request.auth.uid &&
+             data.content is string && data.content.size() > 0 && data.content.size() < 100000 &&
+             data.summary is string && data.summary.size() > 0 && data.summary.size() < 100000 &&
+             data.flashcards is list && data.flashcards.size() <= 100 &&
+             data.quiz is list && data.quiz.size() <= 100 &&
+             isValidDateString(data.createdAt);
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      // Anyone authenticated can read users (for leaderboard and profiles)
+      allow read: if isAuthenticated();
+      
+      // Users can create their own profile
+      allow create: if isOwner(userId) && isValidUser(request.resource.data) && uidUnchanged();
+      
+      // Users can update their own profile
+      allow update: if isOwner(userId) && isValidUser(request.resource.data) && uidNotModified() &&
+                    // Ensure they don't arbitrarily increase XP unless it's a valid increment
+                    // (In a real app, XP should be handled by a secure backend function, but for this prototype we allow client-side increments)
+                    (request.resource.data.xp >= resource.data.xp) &&
+                    // Ensure createdAt doesn't change
+                    request.resource.data.createdAt == resource.data.createdAt;
+    }
+
+    match /notes/{noteId} {
+      // Users can only read their own notes
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      
+      // Users can create their own notes
+      allow create: if isAuthenticated() && isValidNote(request.resource.data);
+      
+      // Notes are immutable in this app (no update/delete needed)
+      allow update, delete: if false;
+    }
+  }
+}

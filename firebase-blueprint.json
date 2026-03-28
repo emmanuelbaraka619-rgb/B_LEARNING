@@ -1,0 +1,67 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A user of the B_LEARNING platform.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The user's unique ID." },
+        "displayName": { "type": "string", "description": "The user's display name." },
+        "email": { "type": "string", "format": "email", "description": "The user's email address." },
+        "photoURL": { "type": "string", "format": "uri", "description": "URL to the user's profile photo." },
+        "xp": { "type": "number", "description": "The user's total experience points." },
+        "badges": { "type": "array", "items": { "type": "string" }, "description": "A list of badges earned by the user." },
+        "bio": { "type": "string", "description": "A short biography of the user." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "The date and time the user was created." }
+      },
+      "required": ["uid", "displayName", "email", "xp", "badges", "createdAt"]
+    },
+    "Note": {
+      "title": "Note",
+      "description": "A set of notes uploaded by a user, along with generated learning materials.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "The ID of the user who uploaded the notes." },
+        "content": { "type": "string", "description": "The raw content of the notes." },
+        "summary": { "type": "string", "description": "The generated summary of the notes." },
+        "flashcards": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "front": { "type": "string" },
+              "back": { "type": "string" }
+            },
+            "required": ["front", "back"]
+          },
+          "description": "The generated flashcards."
+        },
+        "quiz": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "question": { "type": "string" },
+              "options": { "type": "array", "items": { "type": "string" } },
+              "answer": { "type": "string" }
+            },
+            "required": ["question", "options", "answer"]
+          },
+          "description": "The generated quiz."
+        },
+        "createdAt": { "type": "string", "format": "date-time", "description": "The date and time the notes were uploaded." }
+      },
+      "required": ["userId", "content", "summary", "flashcards", "quiz", "createdAt"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Stores user profiles."
+    },
+    "notes/{noteId}": {
+      "schema": { "$ref": "#/entities/Note" },
+      "description": "Stores uploaded notes and generated learning materials."
+    }
+  }
+}
